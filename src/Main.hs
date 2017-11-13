@@ -70,7 +70,7 @@ keys Options{..} = catMaybes $ scanl f Nothing (zip range controls)
 
 drawKey :: Options -> Toolbox -> PianoKey -> Update ()
 drawKey Options{..} Toolbox{..} PianoKey{..} = do
-  let width = if isBlack then blackKeyWidth else whiteKeyWidth
+  let width  = if isBlack then blackKeyWidth  else whiteKeyWidth
   let height = if isBlack then blackKeyHeight else whiteKeyHeight
   let r = firstKeyRow
   let c = column
@@ -128,12 +128,8 @@ main = runCurses $ do
       }
     -- update the locations for the keys
     let (blacks, whites) = partition isBlack (keys options)
-    -- draw white keys first
-    forM_ whites $ \key@(PianoKey{..}) -> do
-      drawKey options toolbox key
-    -- draw black keys over the white keys
-    forM_ blacks $ \key@(PianoKey{..}) -> do
-      drawKey options toolbox key
+    forM_ whites $ drawKey options toolbox -- draw white keys first
+    forM_ blacks $ drawKey options toolbox -- draw black keys over the white keys
     moveCursor 0 0
   render
   waitFor w $ \ev -> do
