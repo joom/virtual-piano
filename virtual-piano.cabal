@@ -1,0 +1,17 @@
+name:                virtual-piano
+version:             0.1.0.0
+author:              Joomy Korkut
+maintainer:          joomy@cattheory.com
+copyright:           2017 Joomy Korkut
+extra-source-files:  README.md
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable virtual-piano
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base >= 4.7 && < 5
+                     , Euterpea
+                     , ncurses
+  default-language:    Haskell2010
