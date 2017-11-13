@@ -42,10 +42,6 @@ data PianoKey = PianoKey {
   , pressed :: Bool
   } deriving Show
 
-data State = State {
-    keysState :: [Key]
-  }
-
 keyName :: AbsPitch -> String
 keyName = renameSharp . f . pitch
   where f (x, y) = show x ++ show y
@@ -72,9 +68,6 @@ keys Options{..} = catMaybes $ scanl f Nothing (zip range controls)
                     (True, False)  -> column + (div blackKeyWidth 2)
                     _ -> error "Impossible: Two black keys cannot be consecutive"
 
-initialState :: State
-initialState = State []
-
 drawKey :: Options -> Toolbox -> PianoKey -> Update ()
 drawKey Options{..} Toolbox{..} PianoKey{..} = do
   let width = if isBlack then blackKeyWidth else whiteKeyWidth
@@ -98,6 +91,10 @@ drawKey Options{..} Toolbox{..} PianoKey{..} = do
   moveCursor r (c + width)            ; drawGlyph glyphCornerUR
   moveCursor (r + height) (c + width) ; drawGlyph glyphCornerLR
   moveCursor r c                      ; drawGlyph glyphCornerUL
+  moveCursor (firstKeyRow + height - 2) (c + 1)
+  drawString name
+  moveCursor (firstKeyRow + height - 1) (c + 1)
+  drawString $ showControl control
 
 waitFor :: Window -> (Event -> Curses Bool) -> Curses ()
 waitFor w p = loop where
@@ -134,17 +131,9 @@ main = runCurses $ do
     -- draw white keys first
     forM_ whites $ \key@(PianoKey{..}) -> do
       drawKey options toolbox key
-      moveCursor (firstKeyRow options + whiteKeyHeight options - 2) (column + 1)
-      drawString name
-      moveCursor (firstKeyRow options + whiteKeyHeight options - 1) (column + 1)
-      drawString $ showControl control
     -- draw black keys over the white keys
     forM_ blacks $ \key@(PianoKey{..}) -> do
       drawKey options toolbox key
-      moveCursor (firstKeyRow options + blackKeyHeight options - 2) (column + 1)
-      drawString name
-      moveCursor (firstKeyRow options + blackKeyHeight options - 1) (column + 1)
-      drawString $ showControl control
     moveCursor 0 0
   render
   waitFor w $ \ev -> do
@@ -153,7 +142,7 @@ main = runCurses $ do
         case find ((== c) . control) (keys options) of
           Nothing -> return ()
           Just key -> do
-            liftIO $ forkIO $ play  $ note 1 (absP key)
+            liftIO $ forkIO $ play  $ note 1 (absP key) -- ugh
             return ()
       _ -> return ()
     return $ ev `elem` map EventCharacter ['\ESC', '`']
