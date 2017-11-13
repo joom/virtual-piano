@@ -1,8 +1,10 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 module Main where
 
+import Control.Concurrent (forkIO)
 import Control.Monad (forM_)
-import Data.List (partition)
+import Control.Monad.IO.Class (liftIO)
+import Data.List (partition, find)
 import Data.Maybe (catMaybes)
 import Euterpea
 import UI.NCurses
@@ -40,6 +42,10 @@ data PianoKey = PianoKey {
   , pressed :: Bool
   } deriving Show
 
+data State = State {
+    keysState :: [Key]
+  }
+
 keyName :: AbsPitch -> String
 keyName = renameSharp . f . pitch
   where f (x, y) = show x ++ show y
@@ -66,6 +72,9 @@ keys Options{..} = catMaybes $ scanl f Nothing (zip range controls)
                     (True, False)  -> column + (div blackKeyWidth 2)
                     _ -> error "Impossible: Two black keys cannot be consecutive"
 
+initialState :: State
+initialState = State []
+
 drawKey :: Options -> Toolbox -> PianoKey -> Update ()
 drawKey Options{..} Toolbox{..} PianoKey{..} = do
   let width = if isBlack then blackKeyWidth else whiteKeyWidth
@@ -90,13 +99,15 @@ drawKey Options{..} Toolbox{..} PianoKey{..} = do
   moveCursor (r + height) (c + width) ; drawGlyph glyphCornerLR
   moveCursor r c                      ; drawGlyph glyphCornerUL
 
-waitFor :: Window -> (Event -> Bool) -> Curses ()
+waitFor :: Window -> (Event -> Curses Bool) -> Curses ()
 waitFor w p = loop where
     loop = do
         ev <- getEvent w Nothing
         case ev of
             Nothing -> loop
-            Just ev' -> if p ev' then return () else loop
+            Just ev' -> do
+              b <- p ev'
+              if b then return () else loop
 
 main :: IO ()
 main = runCurses $ do
@@ -105,6 +116,7 @@ main = runCurses $ do
   toolbox <- Toolbox <$> newColorID ColorBlack ColorWhite 1
                      <*> newColorID ColorWhite ColorBlack 2
                      <*> newColorID ColorBlack ColorYellow 3
+  let options = initialOptions
   updateWindow w $ do
     (sizeR, sizeC) <- windowSize
     let options = initialOptions {
@@ -135,4 +147,13 @@ main = runCurses $ do
       drawString $ showControl control
     moveCursor 0 0
   render
-  waitFor w (\ev -> ev `elem` map EventCharacter ['\ESC', '`'] )
+  waitFor w $ \ev -> do
+    case ev of
+      EventCharacter c -> do
+        case find ((== c) . control) (keys options) of
+          Nothing -> return ()
+          Just key -> do
+            liftIO $ forkIO $ play  $ note 1 (absP key)
+            return ()
+      _ -> return ()
+    return $ ev `elem` map EventCharacter ['\ESC', '`']
