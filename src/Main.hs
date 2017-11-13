@@ -21,8 +21,8 @@ data Options = Options {
   }
 
 initialOptions :: Options
-initialOptions = Options [48..72]
-                         "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+initialOptions = Options [48..88]
+                         "1234567890-=\bqwertyuiop[]\\asdfghjkl;'\nzxcvbnm,./"
                          0 0 6 10 4 6 0 0
 
 data Toolbox = Toolbox {
@@ -44,6 +44,13 @@ keyName :: AbsPitch -> String
 keyName = renameSharp . f . pitch
   where f (x, y) = show x ++ show y
         renameSharp = map $ \case 's' -> '#' ; c -> c
+
+showControl :: Char -> String
+showControl '\n' = "↵"
+showControl '\\' = "\\"
+showControl '\'' = "'"
+showControl '\b' = "⌫"
+showControl c = init $ tail $ show $ c
 
 isBlackKey :: AbsPitch -> Bool
 isBlackKey i = fst (pitch i) `elem` [As,Cs,Ds,Fs,Gs]
@@ -118,14 +125,14 @@ main = runCurses $ do
       moveCursor (firstKeyRow options + whiteKeyHeight options - 2) (column + 1)
       drawString name
       moveCursor (firstKeyRow options + whiteKeyHeight options - 1) (column + 1)
-      drawString [control]
+      drawString $ showControl control
     -- draw black keys over the white keys
     forM_ blacks $ \key@(PianoKey{..}) -> do
       drawKey options toolbox key
       moveCursor (firstKeyRow options + blackKeyHeight options - 2) (column + 1)
       drawString name
       moveCursor (firstKeyRow options + blackKeyHeight options - 1) (column + 1)
-      drawString [control]
+      drawString $ showControl control
     moveCursor 0 0
   render
   waitFor w (\ev -> ev `elem` map EventCharacter ['\ESC', '`'] )
