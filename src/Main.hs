@@ -9,16 +9,21 @@ import UI.NCurses
 
 data Options = Options {
     range          :: [AbsPitch]
+  , controls       :: [Char]
   , firstKeyRow    :: Integer
   , firstKeyColumn :: Integer
   , whiteKeyWidth  :: Integer
   , whiteKeyHeight :: Integer
   , blackKeyWidth  :: Integer
   , blackKeyHeight :: Integer
+  , windowRows     :: Integer
+  , windowCols     :: Integer
   }
 
 initialOptions :: Options
-initialOptions = Options [48..84] 5 5 6 10 4 6
+initialOptions = Options [48..72]
+                         "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
+                         0 0 6 10 4 6 0 0
 
 data Toolbox = Toolbox {
     whiteKeyColor   :: ColorID
@@ -28,6 +33,7 @@ data Toolbox = Toolbox {
 
 data PianoKey = PianoKey {
     absP    :: AbsPitch
+  , control :: Char
   , name    :: String
   , isBlack :: Bool
   , column  :: Integer
@@ -43,15 +49,15 @@ isBlackKey :: AbsPitch -> Bool
 isBlackKey i = fst (pitch i) `elem` [As,Cs,Ds,Fs,Gs]
 
 keys :: Options -> [PianoKey]
-keys Options{..} = catMaybes $ scanl f Nothing range
+keys Options{..} = catMaybes $ scanl f Nothing (zip range controls)
   where
-    f Nothing i = Just $ PianoKey i (keyName i) (isBlackKey i) firstKeyRow False
-    f (Just PianoKey{..}) i = Just $ PianoKey i (keyName i) (isBlackKey i) c False
-      where c = case (isBlack, isBlackKey i) of -- are the prev and curr keys black
-                  (False, True)  -> column + (div whiteKeyWidth 2) + 1
-                  (False, False) -> column + whiteKeyWidth
-                  (True, False)  -> column + (div blackKeyWidth 2)
-                  _ -> error "Impossible: Two black keys cannot be consecutive"
+    f Nothing (i, c) = Just $ PianoKey i c (keyName i) (isBlackKey i) firstKeyColumn False
+    f (Just PianoKey{..}) (i, c) = Just $ PianoKey i c (keyName i) (isBlackKey i) col False
+      where col = case (isBlack, isBlackKey i) of -- are the prev and curr keys black
+                    (False, True)  -> column + (div whiteKeyWidth 2) + 1
+                    (False, False) -> column + whiteKeyWidth
+                    (True, False)  -> column + (div blackKeyWidth 2)
+                    _ -> error "Impossible: Two black keys cannot be consecutive"
 
 drawKey :: Options -> Toolbox -> PianoKey -> Update ()
 drawKey Options{..} Toolbox{..} PianoKey{..} = do
@@ -92,17 +98,34 @@ main = runCurses $ do
   toolbox <- Toolbox <$> newColorID ColorBlack ColorWhite 1
                      <*> newColorID ColorWhite ColorBlack 2
                      <*> newColorID ColorBlack ColorYellow 3
-  let options = initialOptions
-  let (blacks, whites) = partition isBlack (keys options)
   updateWindow w $ do
+    (sizeR, sizeC) <- windowSize
+    let options = initialOptions {
+        windowRows = sizeR
+      , windowCols = sizeC
+      }
+    let (blacks, whites) = partition isBlack (keys options)
+    let whiteCount = fromIntegral (length whites)
+    let options = initialOptions {
+        firstKeyRow = (div sizeR 2) - (div (whiteKeyHeight options) 2)
+      , firstKeyColumn = (div sizeC 2) - (div (whiteKeyWidth options * whiteCount) 2)
+      }
+    -- update the locations for the keys
+    let (blacks, whites) = partition isBlack (keys options)
     -- draw white keys first
     forM_ whites $ \key@(PianoKey{..}) -> do
       drawKey options toolbox key
-      moveCursor (5 + whiteKeyHeight options - 1) (column + 1)
+      moveCursor (firstKeyRow options + whiteKeyHeight options - 2) (column + 1)
       drawString name
+      moveCursor (firstKeyRow options + whiteKeyHeight options - 1) (column + 1)
+      drawString [control]
     -- draw black keys over the white keys
     forM_ blacks $ \key@(PianoKey{..}) -> do
       drawKey options toolbox key
+      moveCursor (firstKeyRow options + blackKeyHeight options - 2) (column + 1)
+      drawString name
+      moveCursor (firstKeyRow options + blackKeyHeight options - 1) (column + 1)
+      drawString [control]
     moveCursor 0 0
   render
-  waitFor w (\ev -> ev == EventCharacter 'q' || ev == EventCharacter 'Q')
+  waitFor w (\ev -> ev `elem` map EventCharacter ['\ESC', '`'] )
